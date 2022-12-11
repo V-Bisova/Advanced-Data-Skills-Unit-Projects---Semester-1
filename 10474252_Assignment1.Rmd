@@ -1,0 +1,270 @@
+---
+title: "Data Wrangling & Visualisation Assignment"
+author: '10474252'
+date: "2022-10-29"
+output: 
+  html_document: 
+    theme: cerulean
+    toc: true
+    toc_float: true
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+# Getting Started
+
+Before I begin with tidying the data, I will load the packages that I will be using throughout this assignment. 
+
+Throughout this assignment, I will use the <b> tidyverse collection of packages </b> for importing, tidying, transforming and manipulating data as well as for some of the visualisations (i.e., using the ggplot2 package). I will use the <b> plotly package </b> to create interactive visualisations. I will use the <b> kableExtra package </b> to format the summary statistics tables included.  
+
+```{r}
+library(tidyverse)
+library(plotly)
+library(kableExtra)
+```
+
+Next, I am going to read in the data set for this assignment with the <b> read_csv() </b> function  and assign it a label (A1). Here I realised that I don't need to include the pathway hyperlink, if the csv data file is in the same folder as the current project. 
+
+```{r}
+A1 <- read_csv("assignment_1_data.csv")
+```
+
+I wanted to explore the data next. I used the <b> str() </b> function to look at the structure of the data (e.g., how many rows, columns, variable types etc.). I then used the <b> head() </b> function to see the first 6 rows and consider the layout of the data. This helped me understand that the data is in a wide format (i.e., there were multiple observations of the dependent variable in a single row). 
+
+```{r}
+str(A1)
+head(A1)
+```
+
+# Data Wrangling 
+
+The first thing I did to tidy the data is reshaping it from wide to long format, with one observation per row. I did that using the <b> pivot_longer() </b> function and specifying with <b> c() </b> that I want the columns Condition1, Condition2, Condition3 and Condition4 combined into a new column named "Condition" (using <b> names_to </b>) with values represented by another column for the dependent variable named "RT" (using <b> values_to </b>). I also assigned the new data format to a new object - tidy_A1.
+
+```{r}
+tidy_A1 <- A1 %>% 
+  pivot_longer(cols = c(Condition1, Condition2, Condition3, Condition4),
+               names_to = "Condition", 
+               values_to = "RT")
+
+tidy_A1
+```
+
+I proceeded to recode the variables with the <b> mutate() </b> function. I changed the names of the conditions using the arguments for the <b> mutate() </b> function, by specifying which variable I want to <b> recode (Condition) </b> and then specifying the new names for each level of the variable (e.g., "Condition1" = ....).
+
+```{r}
+tidy_A1 %>% 
+  mutate(Condition = recode(Condition, 
+                            "Condition1" = "Expected Number_Target Number",
+                            "Condition2" = "Expected Number_Target Letter",
+                            "Condition3" = "Expected Letter_Target Number",
+                            "Condition4" = "Expected Letter_Target Letter"))
+```
+
+Because the study had a repeated measures design with two factors (Expectation, Target), I then separated the Condition column into two new columns (Expectation, Target) to better reflect the experimental design. I did this using the <b> separate() </b> function. Within this function I used the following arguments:
+
+* <b> col = "Condition" </b>, to specify which column I want to separate; 
+* <b> into = c("Expectation, Target") </b>, to specify the two new column to be created and what they would be called;
+
+* <b> sep = "_" </b>, to specify where the split in the column "Conidition" is to happen (i.e., at the underscore sign). 
+
+I also used the <b> mutate() </b> function to convert the two new variables, Expectation and Target, to factors so R recognises these as the independent variables in the experiment. Here I also changed the names of each condition again to make visualisations clearer and less cluttered later on. 
+
+```{r}
+tidy_recoded <- tidy_A1 %>% 
+  mutate(Condition = recode(Condition, 
+                            "Condition1" = "Number_Number",
+                            "Condition2" = "Number_Letter",
+                            "Condition3" = "Letter_Number",
+                            "Condition4" = "Letter_Letter")) %>%
+  separate(col = "Condition", into = c("Expectation", "Target"), sep = "_") %>% 
+  mutate(Expectation = factor(Expectation), Target = factor(Target))
+```
+
+```{r}
+tidy_recoded
+```
+
+
+# Summary Statistics
+
+Next I will generate summary statistics, assigning these to a new object, <b> summary_data </b>, so I can create a summary table after and later use for data visualisations directly.
+
+Utilising the <b> dplyr package </b> part of the tidyverse collection, I use the <b> group_by() </b> function to ensure summary statistics are generated for each of the four experimental conditions. I use the <b> filter() function with an argument !is.na(RT) </b> to ensure that any missing data for reaction times are disregarded. I use the <b> mean() </b>, <b> sd() </b> and <b> n() </b> functions to generate the mean, standard deviation and count for reaction times in each condition. I then use the <b> arrange() </b> function to arrange the output from smallest to largest mean reaction time. 
+
+```{r}
+summary_data <- tidy_recoded %>% 
+  group_by(Expectation, Target) %>% 
+  filter(!is.na(RT)) %>% 
+  summarise(Mean = mean(RT), SD = sd(RT), N = n()) %>% 
+  arrange(Mean)
+
+summary_data
+```
+
+I then worked on presenting the summary statistics in a better formatted table using the <b> kable() </b> function from the <b> knitr package </b> to assign a caption for the table (<b> caption = "..." </b>) and to limit the decimal points to 2 for all numerical output (<b> digits = 2 </b>). I used the <b> kable_styling() </b> function from the <b> kableExtra package </b> to introduce shading in the table (<b> bootstrap_options = "striped" </b>) and to stop it from being the full width of the document (<b> full_width = FALSE </b>). 
+
+## Table 1 
+
+Table 1 shows summary statistics for reaction time across the four experimental conditions. 
+
+```{r, results='asis'}
+table1 <- summary_data %>% 
+  knitr::kable(caption = "Table 1. Summary statistics", digits = 2) %>% 
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+table1
+```
+
+I then wanted to include additional summary statistics in a separate table. I repeated the same process, except this time I used the <b> median() </b>, <b> min() </b> and <b> max() </b> functions to generate the median, minimum and maximum values of reaction time for each experimental condition. I assigned the output to a new object called "summary_data_2". 
+
+```{r}
+summary_data_2 <- tidy_recoded %>% 
+  group_by(Expectation, Target) %>%
+  filter(!is.na(RT)) %>% 
+  summarise(Median = median(RT), Min = min(RT), Max = max(RT)) %>% 
+  arrange(Median)
+
+summary_data_2
+```
+
+## Table 2
+
+Table 2 shows the median, maximum and minimum reaction time values for each condition. This table is created the same way as Table 1, utilising the <b> knitr and kableExtra packages </b>. 
+
+```{r, results='asis'}
+table2 <- summary_data_2 %>% 
+  knitr::kable(caption = "Table 2. Additional summary statistics for reaction time across conditions") %>% 
+  kableExtra::kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+table2
+```
+
+# Data Visualisations (ggplot2)
+
+In this section I will create a visualisation for my data using the <b> ggplot2 package </b> from the tidyverse collection. 
+
+I will create a violin plot with an included box plot. I am creating a violin plot to show peaks in the data and visualise the distribution and I am adding a box plot to portray the summary statistics. 
+
+* I start by using the <b> ggplot() </b> function to specify that I want the variable Expectation to be on the x-axis, the variable Reaction Time (RT) to be on the y-axis and the variable Target to serve as the colour discriminator. 
+
+* I use the <b> geom_violin() </b> function to speciy that I want a violin plot.
+
+* I use the <b> geom_jitter() </b> function to plot data points instead of <b> geom_point() </b> to prevent overplotting and help the visualisation look less cluttered. Within the arguments for <b> geom_jitter() </b>, I specify an alpha level of .2 to add transparency to the data points, and use <b> positiion_jitterdodge() </b> function to help locate the data points within my violin plot. Prior to adding this the data points were positioned to the side of the violin plot. 
+
+* I then add a boxplot using the <b> geom_boxplot() </b> function. Within this function I specify an alpha level .5 to adjust opacity and include show.legend = FALSE to tidy up the appearance of the legend. 
+
+* I also add <b> theme_minimal() </b> to clean up the background. 
+
+* I then specify the text size for the elements of the figure with the <b> theme() </b>, argument element_text(size=14). 
+
+* I also add a caption, axis labels and legend title with the <b> labs() </b> function. Within the labs() function I use "\n" to split the long caption into multiple lines. 
+
+* I add a figure title with the <b> ggtitle() </b> function. I then use the theme() function again with an argument "plot.caption = element_text()" to adjust the caption text size (size = 8), make it in Italics font (face = "italics"), and position it on the left-hand side of the figure (hjust = 0). 
+
+* I assign the output to a new object called "fig1".   
+
+## Figure 1 
+
+```{r}
+fig1 <- tidy_recoded %>%
+  ggplot(aes(x = Expectation, y = RT, 
+             color = Target)) +
+  geom_violin() +
+  geom_jitter(alpha = .2, position=position_jitterdodge()) +
+  geom_boxplot(alpha = .5, show.legend = FALSE) +
+  theme_minimal() +
+  theme(text = element_text(size = 14)) +
+  labs(caption = "Note. Condition 1 (Expected Number - Number Target), Med = 995.5 ms. Condition 2 (Expected Number - Letter Target),\n Med = 1239.5 ms. Condition 3 (Expected Letter - Number Target), Med = 1252.5 ms. Condition 4 (Expected Letter - Letter Target),\n Med = 997.5 ms", x = "Expected Stimulus", y = "Reaction Time (ms)",
+       color = "Target Stimulus") +
+  ggtitle("Figure 1: A violion plot with included box plot") +
+  theme(plot.caption = element_text(size = 7, face = "italic", hjust = 0))
+
+fig1
+```
+
+# Interactive Data Visualisations (plotly)
+
+## An interactive box plot by plotly 
+
+I then wanted to do something a little different with my data visualisations, so I used the <b> plotly package </b> to create interactive plots. 
+
+Firstly, I created an interactive box plot. When you hover over the figure, it shows you the summary statistics. Based on your preferences, you can look at the closest data on hover OR compare data on hover. The compare data on hover would be a useful and quick way to compare differences between conditions. 
+
+I used the <b> plot_ly() </b> function from the plotly package to create my plot. Within this function, I specified the following arguments: 
+
+* <b> data = tidy_recoded </b>, to specify the data object I want to use for the plot;
+
+* <b> y = and x = </b>, to specify the variables to be plotted on each axis;
+
+* <b> type = "box" </b>, to specify the type of plot I want to create is a box plot; 
+
+* <b> boxploints = all </b>, to specify that I would like the raw data points to be plotted too; 
+
+* <b> boxmean = TRUE </b>, to include the mean alongside the median within the boxplot (represented by a dashed line);
+
+* <b> notched = TRUE </b>, to include notches - this changes the shape of the boxplot, so that it is narrowed around the median values. This shows the confidence interval for the median. 
+
+* <b> color = ~Target </b>, to specify different colours based on the target stimulus (so we can discriminate between the four experimental conditions); 
+
+* <b> showlegend = TRUE </b>, to include the legend representing the colours for the Target stimulus; 
+
+I then use the <b> layout() </b> function to include a figure title, as well as titles for both the x- and y-axis and the legend. 
+
+### Figure 2
+
+```{r}
+fig2 <- plot_ly(
+  data = tidy_recoded,
+  y = ~RT,
+  x = ~Expectation,
+  type = "box", 
+  boxpoints = "all",
+  boxmean = TRUE,
+  notched = TRUE, 
+  color = ~Target,
+  showlegend = TRUE
+) %>% 
+  layout(title = 'Figure 2: Interactive box plot', xaxis = list(title = '<b> Expected Stimulus </b>'), 
+         yaxis = list(title = '<b> Reaction Time (ms) </b>'), legend = list(title=list(text='<b> Target Stimulus </b>')))
+
+fig2
+
+```
+
+
+## An interactive bar plot by plotly 
+
+The next visualisation I will create is an interactive bar plot to compare group means. For this, I will use the summary_data object I created earlier and utilise the <b> plotly package </b>. 
+
+* Starting with the <b> plot_ly() </b> function, I assign the data object to be used (data = summary_data) 
+
+* The variable to be plotted on the x-axis (<b> x = ~Expectation </b>)
+
+* The variable to be plotted on the y-axis (<b> y = ~Mean </b>)
+
+* The type of graph I would like to create (<b> type = "bar" </b>)
+
+* And assign the Target factor as a color discriminator (<b> color = ~Target </b>) that will form the legend of the plot and will help distinguish the four experimental conditions. 
+
+I then use the <b> layout() </b> function to add titles for the figure, x- and y-axis, and the legend.
+
+### Figure 3
+
+```{r}
+fig3 <- plot_ly(
+  data = summary_data,
+  x = ~Expectation,
+  y = ~Mean,
+  type = "bar",
+  color = ~Target
+) %>% 
+  layout(title = 'Figure 3: Bar plot comparing mean reaction time across conditions ', xaxis = list(title = '<b> Expected Stimulus </b>'), 
+         yaxis = list(title = '<b> Mean Reaction Time (ms) </b>'), legend = list(title=list(text='<b> Target Stimulus </b>')))
+
+fig3
+
+```
